@@ -50,26 +50,46 @@ async function run() {
         // POST: Add new event
         app.post("/add-event", async (req, res) => {
             try {
-                const { title, description, image, status, views } = req.body;
-                if (!title || !description || !image) {
-                    return res.status(400).send({ message: "Title, description, and image are required" });
+                const {
+                    eventName,
+                    eventDate,
+                    location,
+                    image,
+                    tags,
+                    description,
+                    status,
+                    views,
+                } = req.body;
+
+                // Validate required fields
+                if (!eventName || !eventDate || !location || !image || !description) {
+                    return res.status(400).send({ message: "Event name, date, location, image, and description are required" });
                 }
 
+                // Construct the new event object
                 const newEvent = {
-                    title,
-                    description,
+                    eventName,
+                    eventDate,
+                    location,
                     image,
-                    status: status || "pending", 
-                    views: views || 0,
+                    tags: tags || [], // Ensure tags is an array even if it's not passed
+                    description,
+                    status: status || "pending", // Default status to "pending" if not provided
+                    views: views || 0, // Default views to 0
+                    postedDate: Date.now(), // Timestamp for when the event was created
                 };
 
+                // Insert the new event into the database
                 const result = await eventsCollection.insertOne(newEvent);
-                res.status(201).json({ message: "Event added successfully", event: result });
+
+                // Return success response
+                res.status(201).json({ message: "Event added successfully", event: result.ops[0] });
             } catch (error) {
                 console.error("Error adding event:", error);
-                res.status(500).json({ message: "Server error", error });
+                res.status(500).json({ message: "Server error", error: error.message });
             }
         });
+
 
         // GET: Fetch all approved events
         app.get("/all-events", async (req, res) => {
@@ -81,6 +101,7 @@ async function run() {
                 res.status(500).json({ message: "Server error", error });
             }
         });
+
 
 
     
