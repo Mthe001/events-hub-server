@@ -44,8 +44,43 @@ async function run() {
 
      
         const database = client.db("eventDb");
-        const usersCollection = database.collection("users");
+        const usersCollection = database.collection("users"); 
+        const eventsCollection = database.collection("events");
 
+        // POST: Add new event
+        app.post("/add-event", async (req, res) => {
+            try {
+                const { title, description, image, status, views } = req.body;
+                if (!title || !description || !image) {
+                    return res.status(400).send({ message: "Title, description, and image are required" });
+                }
+
+                const newEvent = {
+                    title,
+                    description,
+                    image,
+                    status: status || "pending", 
+                    views: views || 0,
+                };
+
+                const result = await eventsCollection.insertOne(newEvent);
+                res.status(201).json({ message: "Event added successfully", event: result });
+            } catch (error) {
+                console.error("Error adding event:", error);
+                res.status(500).json({ message: "Server error", error });
+            }
+        });
+
+        // GET: Fetch all approved events
+        app.get("/all-events", async (req, res) => {
+            try {
+                const events = await eventsCollection.find({ status: "approved" }).sort({ views: -1 }).toArray();
+                res.status(200).json(events);
+            } catch (error) {
+                console.error("Error fetching events:", error);
+                res.status(500).json({ message: "Server error", error });
+            }
+        });
 
 
     
@@ -138,6 +173,8 @@ async function run() {
                 return res.status(500).send({ message: "Server error" });
             }
         });
+
+
 
 
 
