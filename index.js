@@ -3,20 +3,19 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const port = process.env.PORT || 5000;
+app.use(express.json());  // This line should be added before your routes
 
-
-
-///middleware
-const allowedOrigins =[
-    'http://localhost:5000', //dev mode origin
+const allowedOrigins = [
+    'http://localhost:5000',  // Backend
+    'http://localhost:5173',  // Frontend (React/Vite)
 ];
 
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true); // Allow access
+            callback(null, true);
         } else {
-            callback(new Error("Not allowed by CORS")); // Deny access
+            callback(new Error("Not allowed by CORS"));
         }
     },
     credentials: true
@@ -46,20 +45,13 @@ async function run() {
         const database = client.db("eventDb");
         const usersCollection = database.collection("users"); 
         const eventsCollection = database.collection("events");
+        const publishersCollection = database.collection("publishers");
+
 
         // POST: Add new event
         app.post("/add-event", async (req, res) => {
             try {
-                const {
-                    eventName,
-                    eventDate,
-                    location,
-                    image,
-                    tags,
-                    description,
-                    status,
-                    views,
-                } = req.body;
+                const { eventName, eventDate, location, image, tags, description, status, views } = req.body;
 
                 // Validate required fields
                 if (!eventName || !eventDate || !location || !image || !description) {
@@ -72,18 +64,27 @@ async function run() {
                     eventDate,
                     location,
                     image,
-                    tags: tags || [], // Ensure tags is an array even if it's not passed
+                    tags: tags || [],  // Ensure tags is an array even if it's not passed
                     description,
-                    status: status || "pending", // Default status to "pending" if not provided
-                    views: views || 0, // Default views to 0
-                    postedDate: Date.now(), // Timestamp for when the event was created
+                    status: status || "pending",  // Default status to "pending" if not provided
+                    views: views || 0,  // Default views to 0
+                    postedDate: Date.now(),  // Timestamp for when the event was created
                 };
 
                 // Insert the new event into the database
                 const result = await eventsCollection.insertOne(newEvent);
 
-                // Return success response
-                res.status(201).json({ message: "Event added successfully", event: result.ops[0] });
+                console.log("MongoDB Insertion Result:", result);
+
+                if (result.insertedId) {
+                    const insertedEvent = {
+                        ...newEvent,
+                        _id: result.insertedId
+                    };
+                    res.status(201).json({ message: "Event added successfully", event: insertedEvent });
+                } else {
+                    res.status(500).json({ message: "Failed to add event" });
+                }
             } catch (error) {
                 console.error("Error adding event:", error);
                 res.status(500).json({ message: "Server error", error: error.message });
@@ -91,16 +92,87 @@ async function run() {
         });
 
 
-        // GET: Fetch all approved events
-        app.get("/all-events", async (req, res) => {
+
+
+        // Route to get all events
+        app.get("/events", async (req, res) => {
             try {
-                const events = await eventsCollection.find({ status: "approved" }).sort({ views: -1 }).toArray();
-                res.status(200).json(events);
+                const events = await eventsCollection.find().toArray();  // Fetch all events from the collection
+
+                if (events.length === 0) {
+                    return res.status(404).json({ message: "No events found" });
+                }
+
+                res.status(200).json(events);  // Return all events in the response
             } catch (error) {
                 console.error("Error fetching events:", error);
+                res.status(500).json({ message: "Server error", error: error.message });
+            }
+        });
+     
+
+        // Route to get a single event by ID
+        app.get("/event/:id", async (req, res) => {
+            try {
+                const eventId = req.params.id;  // Get the event ID from the URL parameter
+                const event = await eventsCollection.findOne({ _id: new ObjectId(eventId) });
+
+                if (!event) {
+                    return res.status(404).json({ message: "Event not found" });
+                }
+
+                res.status(200).json(event);  // Return the event data
+            } catch (error) {
+                console.error("Error fetching event:", error);
+                res.status(500).json({ message: "Server error", error: error.message });
+            }
+        });
+
+
+       
+        app.post("/all-publishers", async (req, res) => {
+            try {
+                const { name, email, website, description, logo } = req.body;
+
+                // Validate required fields
+                if (!name || !email || !website) {
+                    return res.status(400).send({ message: "Name, email, and website are required" });
+                }
+
+                const newPublisher = {
+                    name,
+                    email,
+                    website,
+                    description: description || "",
+                    logo: logo || "",
+                    createdAt: new Date(),
+                };
+
+                // Insert into the database
+                const result = await publishersCollection.insertOne(newPublisher);
+
+                res.status(201).json({ message: "Publisher added successfully", publisher: result.ops[0] });
+            } catch (error) {
+                console.error("Error adding publisher:", error);
+                res.status(500).json({ message: "Server error", error: error.message });
+            }
+        });
+
+       
+        app.get("/all-publishers", async (req, res) => {
+            try {
+                const publishers = await publishersCollection.find().toArray();
+                res.status(200).json(publishers);
+            } catch (error) {
+                console.error("Error fetching publishers:", error);
                 res.status(500).json({ message: "Server error", error });
             }
         });
+
+
+
+
+
 
 
 
